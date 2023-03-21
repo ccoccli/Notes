@@ -288,3 +288,134 @@ int main(){
 - Linux 使用“文件描述符”的概念，而 Windows 使用“文件句柄”的概念；Linux 不区分 socket 文件和普通文件，而 Windows 区分；Linux 下 socket() 函数的返回值为 int 类型，而 Windows 下为 SOCKET 类型，也就是句柄。
 - Linux 下使用 read() / write() 函数读写，而 Windows 下使用 recv() / send() 函数发送和接收。
 - 关闭 socket 时，Linux 使用 close() 函数，而 Windows 使用 closesocket() 函数。
+
+# 8.socket function explain-1 socket
+
+## 1.socket under Unix/Linux
+
+```c
+int socket(int af, int type, int protocol);
+```
+
+- the first param : af is address fanily,  it is divided into `AF_INET` and `AFINET6`. also, you can use pf, it has the same effect of the af, as usual, it is divided into `PF_INET` and `PF_INET6`.
+
+- the second param :  type is data transport func, it is divided into `SOCK_STREAM` and `SOCK_DGRAM`.
+- the third param : protocol shows transport protocol.it is divided into `IPPROTO_TCP`  and `IPPTOTO_UDP`.If set to 0, the system will automatically push the transmission protocol type
+
+> using example
+
+```c
+int tcp_scoket = socket(AF_INET, SOCK_STREAM, 0);
+int udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
+```
+
+## 2.socket under windows
+
+```c
+SOCKET socket(int af, int type, int protocol);
+```
+
+> 除了返回值类型不同，其他都是相同的。Windows 不把套接字作为普通文件对待，而是返回 SOCKET 类型的句柄, using example : 
+
+```c
+SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+```
+
+# 9.socket function explain-2 bind() and connect()
+
+## 1.bind()
+
+```c
+int bind(int sock, struct sockaddr *addr, socklen_t addrlen);      //Linux
+int bind(SOCKET sock, const struct sockaddr *addr, int addrlen);   //Windows
+```
+
+> sock 为 socket 文件描述符，addr 为 sockaddr 结构体变量的指针，addrlen 为 addr 变量的大小，可由 sizeof() 计算
+
+```c
+/*此结构体socket中存在，此处仅作为说明使用*/
+struct sockaddr
+{
+    sa_family_t  sin_family;      //地址族（Address Family），也就是地址类型
+    char         sa_data[14];     //IP地址和端口号
+};
+struct sockaddr_in
+{
+    sa_family_t     sin_family;   //地址族（Address Family），也就是地址类型
+    uint16_t        sin_port;     //16位的端口号
+    struct in_addr  sin_addr;     //32位IP地址
+    char            sin_zero[8];  //不使用，一般用0填充
+};
+struct in_addr
+{
+    in_addr_t  s_addr;            //32位的IP地址
+};
+
+//创建套接字
+int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+//创建sockaddr_in结构体变量
+struct sockaddr_in serv_addr;
+memset(&serv_addr, 0, sizeof(serv_addr));            //每个字节都用0填充
+serv_addr.sin_family = AF_INET;                      //使用IPv4地址
+serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  //具体的IP地址
+serv_addr.sin_port = htons(1234);                    //端口
+
+//将套接字和IP、端口绑定
+bind(serv_sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+```
+
+- sin_family 和 socket() 的第一个参数的含义相同，取值也要保持一致。
+- sin_prot 为端口号。uint16_t 的长度为两个字节，理论上端口号的取值范围为 0~65536，但 0~1023 的端口一般由系统分配给特定的服务程序，例如 Web 服务的端口号为 80，FTP 服务的端口号为 21，所以我们的程序要尽量在 1024~65536 之间分配端口号。
+- sin_addr 是 struct in_addr 结构体类型的变量。
+- sin_zero[8] 是多余的8个字节，没有用，一般使用 memset() 函数填充为 0。上面的代码中，先用 memset() 将结构体的全部字节填充为 0，再给前3个成员赋值，剩下的 sin_zero 自然就是 0 了。
+
+> sockaddr 和 sockaddr_in 的长度相同，都是16字节，只是将IP地址和端口号合并到一起，用一个成员 sa_data 表示。要想给 sa_data 赋值，必须同时指明IP地址和端口号，例如”127.0.0.1:80“，遗憾的是，没有相关函数将这个字符串转换成需要的形式，也就很难给 sockaddr 类型的变量赋值，所以使用 sockaddr_in 来代替。这两个结构体的长度相同，强制转换类型时不会丢失字节，也没有多余的字节。
+>
+> 可以认为，sockaddr 是一种通用的结构体，可以用来保存多种类型的IP地址和端口号，而 sockaddr_in 是专门用来保存 IPv4 地址的结构体。另外还有 sockaddr_in6，用来保存 IPv6 地址，它的定义如下：
+
+```c
+struct sockaddr_in6 
+{ 
+    sa_family_t sin6_family;     //(2)地址类型，取值为AF_INET6
+    in_port_t sin6_port;         //(2)16位端口号
+    uint32_t sin6_flowinfo;      //(4)IPv6流信息
+    struct in6_addr sin6_addr;   //(4)具体的IPv6地址
+    uint32_t sin6_scope_id;      //(4)接口范围ID
+};
+```
+
+## 2.connect()
+
+```c
+int connect(int sock, struct sockaddr *serv_addr, socklen_t addrlen);     //Linux
+int connect(SOCKET sock, const struct sockaddr *serv_addr, int addrlen);  //Windows
+```
+
+# 10.socket function explain-3 listen()和accept()
+
+## 1.lsiten()
+
+```c
+int listen(int sock, int backlog);      //Linux
+int listen(SOCKET sock, int backlog);   //Windows
+```
+
+> - sock 为需要进入监听状态的套接字，backlog 为请求队列的最大长度。
+> - 所谓被动监听，是指当没有客户端请求时，套接字处于“睡眠”状态，只有当接收到客户端请求时，套接字才会被“唤醒”来响应请求。
+> - 当套接字正在处理客户端请求时，如果有新的请求进来，套接字是没法处理的，只能把它放进缓冲区，待当前请求处理完毕后，再从缓冲区中读取出来处理。如果不断有新的请求进来，它们就按照先后顺序在缓冲区中排队，直到缓冲区满。这个缓冲区，就称为请求队列（Request Queue）。
+> - 缓冲区的长度（能存放多少个客户端请求）可以通过 listen() 函数的 backlog 参数指定，但究竟为多少并没有什么标准，可以根据你的需求来定，并发量小的话可以是10或者20。
+> - 如果将 backlog 的值设置为 SOMAXCONN，就由系统来决定请求队列长度，这个值一般比较大，可能是几百，或者更多。
+> - 当请求队列满时，就不再接收新的请求，对于 Linux，客户端会收到 ECONNREFUSED 错误，对于 Windows，客户端会收到 WSAECONNREFUSED 错误。
+> - 注意：listen() 只是让套接字处于监听状态，并没有接收请求。接收请求需要使用 accept() 函数。
+
+## 2.accept()
+
+```c
+int accept(int sock, struct sockaddr *addr, socklen_t *addrlen);  //Linux
+SOCKET accept(SOCKET sock, struct sockaddr *addr, int *addrlen);  //Windows
+```
+
+> - 它的参数与 listen() 和 connect() 是相同的：sock 为服务器端套接字，addr 为 sockaddr_in 结构体变量，addrlen 为参数 addr 的长度，可由 sizeof() 求得。
+> - accept() 返回一个新的套接字来和客户端通信，addr 保存了客户端的IP地址和端口号，而 sock 是服务器端的套接字，大家注意区分。后面和客户端通信时，要使用这个新生成的套接字，而不是原来服务器端的套接字。
+> - 最后需要说明的是：listen() 只是让套接字进入监听状态，并没有真正接收客户端请求，listen() 后面的代码会继续执行，直到遇到 accept()。accept() 会阻塞程序执行（后面代码不能被执行），直到有新的请求到来。
