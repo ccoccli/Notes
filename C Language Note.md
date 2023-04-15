@@ -198,3 +198,43 @@ int main()
 |     pointer(32位系统)      |       4        |  32  |                         NULL                         |
 |     pointer(64位系统)      |       8        |  64  |                         NULL                         |
 
+# 4.回调函数
+
+## 1.回调函数是干嘛的？
+
+- **为了封装内部实现细节**
+- **为了使程序变得更加灵活，随时响应即将到来的信号**
+
+## 2.回调函数的组成
+
+- **回调函数主体**
+- **主调函数**
+- **中间函数**
+
+```c
+#include <stdio.h>
+
+typedef void (*FUNC)(int params1, int params2);
+
+int callBackFunc(int params1, int params2, FUNC fun)
+{
+    if(fun == NULL)
+    {
+        printf("fun is null!\n");
+    }
+    else
+        fun(params1, params2);
+}
+void myFunc(int a, int b)
+{
+    printf("a + b is %d\n", a+b);
+}
+
+int main()
+{
+    callBackFunc(1, 2, myFunc);
+    
+    return 0;
+}
+```
+
